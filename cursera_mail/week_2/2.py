@@ -11,6 +11,38 @@ SCREEN_DIM = (800, 600)
 # =======================================================================================
 # Функции для работы с векторами
 # =======================================================================================
+class Point:
+    def __init__(self, x, y, speed = (0,0)):
+        self.x = int(x)
+        self.y = int(y)
+        self.speed = speed
+
+    def __add__(self, other):
+        """Сумма"""
+        if isinstance(other, type(self)):
+            return type(self)(self.x + other.x, self.y + other.y, self.speed)
+        # elif isinstance(other, type(tuple())):
+        #     return type(self)(self.x + other[0], self.y + other[1])
+
+    def __sub__(self, other):
+        """Разность"""
+        return type(self)(self.x - other.x, self.y - other.y, self.speed)
+
+    def __mul__(self, k):
+        """Умножение на скаляр"""
+        return type(self)(k * self.x, k * self.y, self.speed)
+
+    def scal_mul(self, k):
+        # скаля умнож
+        return sum(k * self.x, k * self.y, self.speed)
+
+    def __len__(self):
+        """длина"""
+        return (self.x**2 + self.y**2)**0.5
+
+    def int_pair(self):
+        """получить картеж целых чисел"""
+        return int(self.x), int(self.y)
 
 class Main():
     def __init__(self):
@@ -20,8 +52,7 @@ class Main():
 
         self.steps = 35
         self.working = True
-        self.points = []
-        self.speeds = []
+        self.objects = []
         self.show_help = False
         self.pause = True
         self.hue = 0
@@ -56,17 +87,17 @@ class Main():
 # =======================================================================================
 # Функции отрисовки
 # =======================================================================================
-    def draw_points(self, points, style="points", width=3, color=(255, 255, 255)):
+    def draw_points(self, objects, style="points", width=3, color=(255, 255, 255)):
         """функция отрисовки точек на экране"""
         if style == "line":
-            for p_n in range(-1, len(points) - 1):
+            for p_n in range(-1, len(objects) - 1):
                 pygame.draw.line(self.gameDisplay, color,
-                                 (int(points[p_n][0]), int(points[p_n][1])),
-                                 (int(points[p_n + 1][0]), int(points[p_n + 1][1])), width)
+                                 (objects[p_n].x, objects[p_n].y),
+                                 (objects[p_n + 1].x, objects[p_n + 1].y), width)
         elif style == "points":
-            for p in points:
+            for p in objects:
                 pygame.draw.circle(self.gameDisplay, color,
-                                   (int(p[0]), int(p[1])), width)
+                                   (p.x, p.y), width)
 
 
     def draw_help(self):
@@ -82,7 +113,7 @@ class Main():
         data.append(["Num-", "Less self.points"])
         data.append(["", ""])
         data.append([str(self.steps), "Current self.points"])
-    
+
         pygame.draw.lines(self.gameDisplay, (255, 50, 50, 255), True, [
             (0, 0), (800, 0), (800, 600), (0, 600)], 5)
         for i, text in enumerate(data):
@@ -92,49 +123,53 @@ class Main():
                 text[1], True, (128, 128, 255)), (200, 100 + 30 * i))
 
 
-    # =======================================================================================
-    # Функции, отвечающие за расчет сглаживания ломаной
-    # =======================================================================================
-    def get_point(self, points, alpha, deg=None):
+    # # =======================================================================================
+    # # Функции, отвечающие за расчет сглаживания ломаной
+    # # =======================================================================================
+    def get_point(self, list_base_points, alpha, deg=None):
         if deg is None:
-            deg = len(points) - 1
+            deg = len(list_base_points) - 1
         if deg == 0:
-            return points[0]
-        return self.add(self.mul(points[deg], alpha), self.mul(self.get_point(points, alpha, deg - 1), 1 - alpha))
+            return list_base_points[0]
+        return list_base_points[deg]*alpha + self.get_point(list_base_points, alpha, deg - 1)*(1 - alpha)
 
-
-    def get_points(self, base_points, count):
+    def get_points(self, list_base_points, count):
         alpha = 1 / count
         res = []
         for i in range(count):
-            res.append(self.get_point(base_points, i * alpha))
+            res.append(self.get_point(list_base_points, i * alpha))
         return res
-
-
-    def get_knot(self, points, count):
-        if len(self.points) < 3:
+    #
+    #
+    def get_knot(self, objects, count):
+        if len(objects) < 3:
             return []
         res = []
-        for i in range(-2, len(self.points) - 2):
+        for i in range(-2, len(self.objects) - 2):
             ptn = []
-            ptn.append(self.mul(self.add(self.points[i], self.points[i + 1]), 0.5))
-            ptn.append(self.points[i + 1])
-            ptn.append(self.mul(self.add(self.points[i + 1], self.points[i + 2]), 0.5))
-
+            new_point_left = self.objects[i] + self.objects[i + 1]
+            new_point_left *= 0.5
+            new_point_midle = self.objects[i + 1]
+            new_point_right =  self.objects[i+1] + self.objects[i + 2]
+            new_point_right *= 0.5
+            ptn.append(new_point_left)
+            ptn.append(new_point_midle)
+            ptn.append(new_point_right)
             res.extend(self.get_points(ptn, count))
         return res
-
-
-    def set_points(self, points, speeds):
+    #
+    #
+    def set_points(self, object):
         """функция перерасчета координат опорных точек"""
-        for p in range(len(points)):
-            points[p] = self.add(points[p], speeds[p])
-            if points[p][0] > SCREEN_DIM[0] or points[p][0] < 0:
-                speeds[p] = (- speeds[p][0], speeds[p][1])
-            if points[p][1] > SCREEN_DIM[1] or points[p][1] < 0:
-                speeds[p] = (speeds[p][0], -speeds[p][1])
+        for p in range(len(self.objects)):
+            curr_point = self.objects[p]
+            curr_point.x = curr_point.x + curr_point.speed[0]
+            curr_point.y = curr_point.y + curr_point.speed[1]
 
-
+            if curr_point.x > SCREEN_DIM[0] or curr_point.x < 0:
+                curr_point.speed = (- curr_point.speed[0], curr_point.speed[1])
+            if curr_point.y > SCREEN_DIM[1] or curr_point.y < 0:
+                curr_point.speed = (curr_point.speed[0], -curr_point.speed[1])
 # =======================================================================================
 # Основная программа
 # =======================================================================================
@@ -160,65 +195,27 @@ class Main():
                         self.steps -= 1 if self.steps > 1 else 0
     
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    self.points.append(event.pos)
-                    self.speeds.append((random.random() * 2, random.random() * 2))
+                    speed = (random.random() * 2, random.random() * 2)
+                    p = Point(*event.pos, speed)
+                    self.objects.append(p)
 
             self.gameDisplay.fill((0, 0, 0))
             self.hue = (self.hue + 1) % 360
             self.color.hsla = (self.hue, 100, 50, 100)
-            self.draw_points(self.points)
-            self.draw_points(self.get_knot(self.points, self.steps), "line", 3, self.color)
+            self.draw_points(self.objects)
+            self.draw_points(self.get_knot(self.objects, self.steps), "line", 3, self.color)
             if not self.pause:
-                self.set_points(self.points, self.speeds)
+                self.set_points(self.objects)
             if self.show_help:
                 self.draw_help()
+                print('help')
 
             pygame.display.flip()
-            pygame.display.flip()
-    
-        pygame.display.quit()
-        pygame.quit()
-        exit(0)
+        # pygame.display.quit()
+        # pygame.quit()
+        # exit(0)
 
-class Vec2d:
 
-    def __init__(self, x, y, speed=0):
-        self.x = x
-        self.y = y
-        self.speed = speed
-
-    def __add__(self, other):
-        """Сумма"""
-        return type(self)(self.x + other.x, self.y + other.y)
-
-    def __sub__(self, other):
-        """Разность"""
-        return type(self)(self.x - other.x, self.y - other.y)
-
-    def __mul__(self, k):
-        """Умножение на скаляр"""
-        return type(self)(k * self.x, k * self.y)
-
-    def scal_mul(self, k):
-        # скаля умнож
-        return sum(k * self.x, k * self.y)
-
-    def __len__(self):
-        """длина"""
-        return (self.x**2 + self.y**2)**0.5
-
-    def int_pair(self):
-        """получить картеж целых чисел"""
-        return int(self.x), int(self.y)
-
-    # def __getitem__(self, key):
-    #     return (self.x, self.y)[key]
-    #
-    # def __str__(self):
-    #     return f"({self.x}, {self.y})"
-    #
-    # def __repr__(self):
-    #     return f"({self.x}, {self.y})"
 
 
 class Polyline:
@@ -251,7 +248,7 @@ class Polyline:
 
     def draw_points(self, points, width=3, color=(255, 255, 255)):
         for point in points:
-            pygame.draw.circle(gameDisplay, color, point.int_pair(), width)
+            pygame.draw.circle(self.gameDisplay, color, point.int_pair(), width)
 
 class Knot(Polyline):
     # Сглаживание ломаной
